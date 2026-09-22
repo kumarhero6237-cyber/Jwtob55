@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JWT Token Console</title>
+<style>
+:root{--bg:#070a12;--card:#0f1524;--line:#202a3d;--text:#eef3ff;--muted:#8d99ad;--accent:#6ea8fe;--ok:#49d17d;--err:#ff6675}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% 0,#14203b 0,#070a12 45%);color:var(--text);font-family:Inter,system-ui,Arial,sans-serif;min-height:100vh}.wrap{max-width:1050px;margin:auto;padding:28px 16px 50px}.hero{margin-bottom:20px}.hero h1{margin:0;font-size:30px}.hero p{color:var(--muted);margin:8px 0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.card{background:rgba(15,21,36,.92);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 15px 50px rgba(0,0,0,.25)}label{display:block;color:var(--muted);font-size:13px;margin:12px 0 6px}input,button,textarea{font:inherit}input[type=text],input[type=password],input[type=file]{width:100%;background:#0a0f1b;border:1px solid var(--line);border-radius:11px;padding:12px;color:var(--text);outline:none}input:focus{border-color:var(--accent)}button{border:0;border-radius:11px;padding:11px 15px;cursor:pointer;font-weight:700}.primary{background:var(--accent);color:#07101f}.ghost{background:#172033;color:var(--text)}.row{display:flex;gap:10px;align-items:center}.row button{margin-top:14px}.status{margin-top:12px;color:var(--muted);min-height:20px}.status.ok{color:var(--ok)}.status.err{color:var(--err)}pre{background:#070b13;border:1px solid var(--line);border-radius:12px;padding:15px;overflow:auto;max-height:520px;white-space:pre-wrap;word-break:break-word}.filebox{border:1px dashed #34415a;border-radius:12px;padding:14px}.tablewrap{overflow:auto;margin-top:12px}.items{width:100%;border-collapse:collapse;font-size:13px}.items th,.items td{border-bottom:1px solid var(--line);padding:9px;text-align:left;white-space:nowrap}.items th{color:var(--muted)}.small{font-size:12px;color:var(--muted)}.pill{display:inline-block;background:#172033;padding:4px 8px;border-radius:999px}.selectbtn{padding:7px 10px;font-size:12px}.footer{color:var(--muted);font-size:12px;margin-top:16px}@media(max-width:800px){.grid{grid-template-columns:1fr}.hero h1{font-size:25px}}
+</style>
+</head>
+<body><main class="wrap">
+<section class="hero"><h1>JWT Token Console</h1><p>Enter one UID + password to request a token and inspect the JSON response.</p></section>
+<div class="grid">
+<section class="card">
+<h2>Manual check</h2>
+<label>UID</label><input id="uid" type="text" autocomplete="off" placeholder="Enter UID">
+<label>Password</label><input id="password" type="password" autocomplete="off" placeholder="Enter password">
+<div class="row"><button class="primary" id="check">Check &amp; Get JSON</button><button class="ghost" id="clear">Clear</button></div>
+<div id="status" class="status"></div>
+</section>
+<section class="card">
+<h2>JSON file</h2>
+<div class="filebox"><input id="file" type="file" accept=".json,application/json"><div class="small" style="margin-top:8px">Parses common fields such as uid/userid/accountid and password/pass/passwd. Entries are only loaded into the table; choose one row and check it manually.</div></div>
+<div id="fileStatus" class="status"></div><div id="table" class="tablewrap"></div>
+</section>
+</div>
+<section class="card" style="margin-top:16px"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Pretty JSON result</h2><button class="ghost" id="copy">Copy JSON</button></div><pre id="result">No result yet.</pre></section>
+<div class="footer">Credentials are kept in the browser form and are not saved by this page.</div>
+</main>
+<script>
+const $=s=>document.querySelector(s), result=$('#result'), status=$('#status');
+function pretty(v){return JSON.stringify(v,null,2)}
+function setResult(v){result.textContent=pretty(v)}
+$('#clear').onclick=()=>{$('#uid').value='';$('#password').value='';status.textContent='';status.className='status';setResult({})};
+$('#copy').onclick=async()=>{try{await navigator.clipboard.writeText(result.textContent);status.textContent='JSON copied';status.className='status ok'}catch(e){status.textContent='Copy failed';status.className='status err'}};
+async function check(uid,password){
+ if(!uid||!password){status.textContent='UID and password are required';status.className='status err';return}
+ status.textContent='Requesting…';status.className='status';
+ try{const r=await fetch('/token?uid='+encodeURIComponent(uid)+'&password='+encodeURIComponent(password),{headers:{'Accept':'application/json'}});let data;try{data=await r.json()}catch{data={status:'error',error:'Server returned non-JSON response',http_status:r.status}};setResult(data);status.textContent=r.ok?'Response received':'Request returned HTTP '+r.status;status.className='status '+(r.ok?'ok':'err')}
+ catch(e){setResult({status:'error',error:e.message});status.textContent='Request failed';status.className='status err'}
+}
+$('#check').onclick=()=>check($('#uid').value.trim(),$('#password').value);
+function findPair(o){if(!o||typeof o!=='object')return null;const keys=Object.keys(o);const norm={};for(const k of keys)norm[k.toLowerCase().replace(/[^a-z0-9]/g,'')]=o[k];const uid=norm.uid??norm.userid??norm.accountid??norm.account;const password=norm.password??norm.pass??norm.passwd??norm.pwd;if(uid!=null&&password!=null)return {uid:String(uid),password:String(password)};return null}
+function collect(o,out=[]){if(Array.isArray(o)){for(const x of o)collect(x,out);return out}if(o&&typeof o==='object'){const p=findPair(o);if(p)out.push(p);for(const k of Object.keys(o))if(o[k]&&typeof o[k]==='object')collect(o[k],out)}return out}
+$('#file').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const data=JSON.parse(await f.text());const pairs=collect(data);$('#fileStatus').textContent=pairs.length+' UID/password entr'+(pairs.length===1?'y':'ies')+' parsed.';$('#fileStatus').className='status ok';render(pairs)}catch(err){$('#fileStatus').textContent='Invalid JSON: '+err.message;$('#fileStatus').className='status err';$('#table').innerHTML=''}};
+function render(items){if(!items.length){$('#table').innerHTML='<div class="small">No matching UID/password pair found.</div>';return}let h='<table class="items"><thead><tr><th>#</th><th>UID</th><th>Password</th><th></th></tr></thead><tbody>';items.forEach((p,i)=>{h+='<tr><td>'+(i+1)+'</td><td>'+esc(p.uid)+'</td><td><span class="pill">••••••</span></td><td><button class="ghost selectbtn" data-i="'+i+'">Load</button></td></tr>'});h+='</tbody></table>';$('#table').innerHTML=h;$('#table').querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>{const p=items[+b.dataset.i];$('#uid').value=p.uid;$('#password').value=p.password;window.scrollTo({top:0,behavior:'smooth'})})}
+function esc(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+</script></body></html>

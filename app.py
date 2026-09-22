@@ -4,9 +4,10 @@
 import time
 import json
 import base64
+from pathlib import Path
 
 import httpx
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from flask_cors import CORS
 from Crypto.Cipher import AES
 
@@ -229,6 +230,13 @@ def generate_jwt_token(uid: str, password: str):
 
 @app.route("/", methods=["GET"])
 def index():
+    try:
+        return Response((Path(__file__).with_name("ui.html")).read_text(encoding="utf-8"), mimetype="text/html")
+    except Exception:
+        return jsonify({"status":"ok","endpoint":"/token?uid=UID&password=PASS"}), 200
+
+@app.route("/api", methods=["GET"])
+def api_info():
     return jsonify({
         "status": "ok",
         "endpoint": "/token?uid=UID&password=PASS",
